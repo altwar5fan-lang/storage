@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Storage</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #08080a; --panel: #101013; --panel-2: #16161a;
+    --border: #26262c; --text: #ececf0; --muted: #8a8a94;
+    --accent: #00ff88; --accent-dim: #00cc6e;
+    --danger: #ff4466; --warn: #ffaa22;
+  }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text);
+    display: flex; flex-direction: column; min-height: 100vh; font-size: 15px;
+  }
+  button { font-family: inherit; cursor: pointer; }
+  input, textarea { font-family: inherit; }
+
+  /* GATE */
+  #gate { position: fixed; inset: 0; background: var(--bg); display: flex;
+    align-items: center; justify-content: center; z-index: 1000; transition: opacity .25s; }
+  #gate.hidden { opacity: 0; pointer-events: none; }
+  .gate-box { background: var(--panel); border: 1px solid var(--border);
+    padding: 48px; border-radius: 14px; width: 380px; text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+  .gate-box h1 { font-size: 24px; margin-bottom: 8px; letter-spacing: -.02em; }
+  .gate-box p { color: var(--muted); font-size: 14px; margin-bottom: 28px; }
+  #keyInput { width: 100%; padding: 16px; font-size: 24px; text-align: center;
+    background: #06060a; border: 1px solid var(--border); border-radius: 10px;
+    color: var(--text); letter-spacing: 8px; outline: none; transition: border-color .15s; }
+  #keyInput:focus { border-color: var(--accent); }
+  #gateError { color: var(--danger); font-size: 13px; margin-top: 14px; min-height: 18px; }
+
+  /* LAYOUT */
+  .app { display: none; flex-direction: column; height: 100vh; overflow: hidden; }
+  .app.show { display: flex; }
+
+  header { padding: 18px 32px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 16px; flex-shrink: 0; background: var(--panel); }
+  header h1 { font-size: 17px; font-weight: 600; letter-spacing: -.01em; }
+  .logo-dot { width: 10px; height: 10px; background: var(--accent); border-radius: 50%;
+    box-shadow: 0 0 12px var(--accent); }
+  .header-spacer { flex: 1; }
+  .search-wrap { position: relative; }
+  #search { padding: 10px 16px 10px 38px; background: var(--bg);
+    border: 1px solid var(--border); border-radius: 8px; color: var(--text);
+    font-size: 14px; width: 320px; outline: none; transition: border-color .15s; }
+  #search:focus { border-color: var(--accent); }
+  .search-wrap::before { content: '⌕'; position: absolute; left: 14px; top: 50%;
+    transform: translateY(-50%); color: var(--muted); font-size: 16px; }
+
+  .body { display: flex; flex: 1; min-height: 0; }
+
+  /* SIDEBAR */
+  aside { width: 280px; border-right: 1px solid var(--border); background: var(--panel);
+    display: flex; flex-direction: column; flex-shrink: 0; }
+  .aside-head { padding: 16px 20px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; }
+  .aside-head span { font-size: 12px; text-transform: uppercase; letter-spacing: .1em;
+    color: var(--muted); font-weight: 600; }
+  .section-tabs { display: flex; border-bottom: 1px solid var(--border); }
+  .section-tab { flex: 1; padding: 12px; background: transparent; border: none;
+    color: var(--muted); font-size: 13px; font-weight: 600;
+    border-bottom: 2px solid transparent; transition: all .15s; }
+  .section-tab:hover { color: var(--text); }
+  .section-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .cat-list { flex: 1; overflow-y: auto; padding: 8px; }
+  .cat-item { padding: 12px 14px; border-radius: 8px; cursor: pointer;
+    display: flex; align-items: center; gap: 12px; font-size: 14px;
+    transition: background .1s; margin-bottom: 2px; user-select: none; }
+  .cat-item:hover { background: var(--panel-2); }
+  .cat-item.active { background: var(--accent); color: #000; font-weight: 600; }
+  .cat-item.active .cat-count { color: #000; opacity: .7; }
+  .cat-icon { font-size: 18px; flex-shrink: 0; }
+  .cat-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cat-count { font-size: 11px; color: var(--muted); padding: 2px 6px;
+    background: var(--panel-2); border-radius: 4px; }
+  .cat-item.active .cat-count { background: rgba(0,0,0,.15); }
+  .cat-del { background: none; border: none; color: var(--muted); font-size: 16px;
+    padding: 2px 6px; border-radius: 4px; opacity: 0; transition: opacity .15s; }
+  .cat-item:hover .cat-del { opacity: 1; }
+  .cat-del:hover { color: var(--danger); }
+  .aside-foot { padding: 12px; border-top: 1px solid var(--border); }
+
+  /* BUTTONS */
+  .btn { padding: 10px 16px; background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-size: 13px; font-weight: 500;
+    transition: all .15s; display: inline-flex; align-items: center; gap: 8px;
+    justify-content: center; text-decoration: none; }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.full { width: 100%; }
+  .btn.primary { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
+  .btn.primary:hover { background: var(--accent-dim); color: #000; }
+  .btn.ghost { background: transparent; }
+  .btn.danger:hover { border-color: var(--danger); color: var(--danger); }
+  .btn.small { padding: 6px 12px; font-size: 12px; }
+
+  /* MAIN */
+  main { flex: 1; overflow-y: auto; padding: 28px 36px; min-width: 0; }
+  .main-head { display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 24px; gap: 16px; flex-wrap: wrap; }
+  .main-head h2 { font-size: 24px; font-weight: 600; letter-spacing: -.02em;
+    display: flex; align-items: center; gap: 12px; }
+  .main-head .count { font-size: 13px; color: var(--muted); font-weight: 400; }
+  .main-actions { display: flex; gap: 8px; }
+
+  /* FILE GRID */
+  .file-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+  .file-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px; display: flex; flex-direction: column; gap: 14px;
+    transition: all .15s; min-height: 130px; }
+  .file-card:hover { border-color: #3a3a44; }
+  .file-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .file-name { font-size: 15px; font-weight: 500; word-break: break-word;
+    line-height: 1.35; flex: 1; }
+  .file-del { background: none; border: none; color: var(--muted); font-size: 16px;
+    padding: 2px 4px; border-radius: 4px; opacity: 0; transition: opacity .15s; }
+  .file-card:hover .file-del { opacity: 1; }
+  .file-del:hover { color: var(--danger); }
+  .file-preview { font-size: 12px; color: var(--muted);
+    font-family: 'SF Mono', Monaco, Consolas, monospace; line-height: 1.5;
+    overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical; word-break: break-all; flex: 1; }
+  .file-foot { display: flex; gap: 6px; margin-top: auto; }
+  .file-foot .btn { flex: 1; }
+
+  /* LINK GRID */
+  .link-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }
+  .link-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px; display: flex; flex-direction: column; gap: 12px;
+    transition: all .15s; }
+  .link-card:hover { border-color: #3a3a44; }
+  .link-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .link-name { font-size: 15px; font-weight: 600; word-break: break-word;
+    line-height: 1.3; flex: 1; }
+  .link-url { font-size: 12px; color: var(--accent); font-family: 'SF Mono', Monaco, monospace;
+    word-break: break-all; text-decoration: none; }
+  .link-url:hover { text-decoration: underline; }
+  .link-desc { font-size: 13px; color: var(--muted); line-height: 1.5;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+    overflow: hidden; }
+  .link-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tag { padding: 3px 9px; background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 20px; font-size: 11px; color: var(--muted);
+    font-weight: 500; cursor: pointer; transition: all .15s; }
+  .tag:hover { border-color: var(--accent); color: var(--accent); }
+  .tag.active { background: var(--accent); color: #000; border-color: var(--accent); }
+  .link-foot { display: flex; gap: 6px; margin-top: auto; padding-top: 6px; }
+  .link-foot .btn { flex: 1; }
+
+  /* FILTER BAR */
+  .filter-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 20px;
+    padding: 12px 16px; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; flex-wrap: wrap; }
+  .filter-label { font-size: 12px; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--muted); font-weight: 600; }
+  .filter-tags { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
+
+  /* EMPTY */
+  .empty { text-align: center; padding: 100px 20px; color: var(--muted); grid-column: 1 / -1; }
+  .empty-icon { font-size: 56px; margin-bottom: 16px; opacity: .5; }
+  .empty h3 { font-size: 18px; color: var(--text); margin-bottom: 8px; }
+  .empty p { font-size: 14px; }
+
+  /* MODAL */
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.85);
+    backdrop-filter: blur(8px); display: none; align-items: center;
+    justify-content: center; z-index: 100; padding: 32px; }
+  .modal-backdrop.show { display: flex; }
+  .modal { background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    width: 100%; max-width: 900px; max-height: 88vh; display: flex;
+    flex-direction: column; box-shadow: 0 30px 80px rgba(0,0,0,.6); }
+  .modal.wide { max-width: 1100px; }
+  .modal-head { padding: 20px 26px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .modal-head h2 { font-size: 17px; word-break: break-word; flex: 1; }
+  .close-x { background: none; border: none; color: var(--muted); font-size: 26px;
+    cursor: pointer; padding: 0 8px; line-height: 1; }
+  .close-x:hover { color: var(--text); }
+  .modal-body { padding: 26px; overflow-y: auto; flex: 1; }
+  .modal-foot { padding: 16px 26px; border-top: 1px solid var(--border);
+    display: flex; gap: 8px; justify-content: flex-end; }
+  .modal-body.view { font-family: 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 13.5px; line-height: 1.7; white-space: pre-wrap; word-break: break-word;
+    background: #06060a; border-radius: 8px; margin: 0 26px 26px;
+    border: 1px solid var(--border); }
+
+  /* FORMS */
+  .field { margin-bottom: 18px; }
+  .field label { display: block; font-size: 12px; text-transform: uppercase;
+    letter-spacing: .08em; color: var(--muted); font-weight: 600; margin-bottom: 8px; }
+  .field input[type=text], .field textarea, .field select, .field input[type=url] {
+    width: 100%; padding: 12px 14px; background: var(--bg);
+    border: 1px solid var(--border); border-radius: 8px; color: var(--text);
+    font-size: 14px; outline: none; transition: border-color .15s; }
+  .field input:focus, .field textarea:focus, .field select:focus { border-color: var(--accent); }
+  .field textarea { font-family: 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 13px; line-height: 1.6; resize: vertical; min-height: 240px; }
+  .field textarea.short { min-height: 80px; font-family: inherit; font-size: 14px; }
+  .field-hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .row { display: flex; gap: 12px; }
+  .row .field { flex: 1; margin-bottom: 18px; }
+
+  /* TAG INPUT */
+  .tag-input-wrap { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+    min-height: 44px; align-items: center; }
+  .tag-chip { display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; background: var(--accent); color: #000;
+    border-radius: 20px; font-size: 12px; font-weight: 600; }
+  .tag-chip button { background: none; border: none; color: #000; cursor: pointer;
+    font-size: 14px; padding: 0; line-height: 1; opacity: .7; }
+  .tag-chip button:hover { opacity: 1; }
+  .tag-input-wrap input { flex: 1; min-width: 120px; background: transparent;
+    border: none; outline: none; color: var(--text); font-size: 13px; padding: 4px; }
+
+  /* TOAST */
+  #toast { position: fixed; bottom: 32px; left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--accent); color: #000; padding: 12px 24px;
+    border-radius: 10px; font-size: 14px; font-weight: 600;
+    transition: transform .25s cubic-bezier(.2,.9,.3,1.2); z-index: 2000;
+    box-shadow: 0 10px 30px rgba(0,255,136,.3); }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; }
+  ::-webkit-scrollbar-thumb:hover { background: #3a3a44; }
+
+  @media (max-width: 768px) {
+    aside { width: 220px; }
+    header { padding: 14px 20px; }
+    #search { width: 160px; }
+    main { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Gate -->
+<div id="gate">
+  <div class="gate-box">
+    <h1>Storage</h1>
+    <p>Enter access key</p>
+    <input id="keyInput" type="password" inputmode="numeric" maxlength="8" autocomplete="off" autofocus>
+    <div id="gateError"></div>
+  </div>
+</div>
+
+<!-- App -->
+<div class="app" id="app">
+  <header>
+    <span class="logo-dot"></span>
+    <h1>Storage</h1>
+    <div class="header-spacer"></div>
+    <div class="search-wrap">
+      <input id="search" type="text" placeholder="Search...">
+    </div>
+  </header>
+
+  <div class="body">
+    <aside>
+      <div class="section-tabs">
+        <button class="section-tab active" data-section="files">Files</button>
+        <button class="section-tab" data-section="links">Links</button>
+      </div>
+      <div class="aside-head">
+        <span id="sidebarLabel">Categories</span>
+        <button class="btn small ghost" id="newCatBtn" title="New">+</button>
+      </div>
+      <div class="cat-list" id="catList"></div>
+      <div class="aside-foot">
+        <button class="btn full small" id="exportBtn">Export backup</button>
+      </div>
+    </aside>
+
+    <main>
+      <div class="main-head">
+        <h2 id="mainTitle">—</h2>
+        <div class="main-actions" id="mainActions"></div>
+      </div>
+      <div id="mainBody"></div>
+    </main>
+  </div>
+</div>
+
+<div id="modalRoot"></div>
+<div id="toast"></div>
+
+<script src="data.js"></script>
+<script>
+// ============================================================
+// STATE
+// ============================================================
+const STORAGE_KEY = 'storage-app-v2';
+const ACCESS_KEY = '6767';
+
+let state = { categories: [], links: [] };
+let activeSection = 'files'; // 'files' | 'links'
+let activeCatId = null;
+let searchTerm = '';
+let activeTags = new Set();
+
+function loadState() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      state = { categories: parsed.categories || [], links: parsed.links || [] };
+      activeCatId = state.categories[0]?.id || null;
+      return;
+    } catch {}
+  }
+  state = JSON.parse(JSON.stringify(window.SEED || { categories: [], links: [] }));
+  if (!state.links) state.links = [];
+  activeCatId = state.categories[0]?.id || null;
+  saveState();
+}
+
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function uid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
+// ============================================================
+// GATE
+// ============================================================
+const gate = document.getElementById('gate');
+const app = document.getElementById('app');
+const keyInput = document.getElementById('keyInput');
+const gateError = document.getElementById('gateError');
+
+function tryUnlock() {
+  if (keyInput.value === ACCESS_KEY) {
+    gate.classList.add('hidden');
+    app.classList.add('show');
+    sessionStorage.setItem('unlocked', '1');
+    loadState();
+    render();
+  } else {
+    gateError.textContent = 'Wrong key';
+    keyInput.value = '';
+    keyInput.focus();
+  }
+}
+keyInput.addEventListener('input', () => {
+  if (keyInput.value.length === ACCESS_KEY.length) tryUnlock();
+});
+keyInput.addEventListener('keydown', e => { if (e.key === 'Enter') tryUnlock(); });
+
+if (sessionStorage.getItem('unlocked') === '1') {
+  gate.classList.add('hidden');
+  app.classList.add('show');
+  loadState();
+  setTimeout(render, 0);
+}
+
+// ============================================================
+// TOAST
+// ============================================================
+const toastEl = document.getElementById('toast');
+let toastTimer;
+function toast(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1600);
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+
+// ============================================================
+// SIDEBAR / SECTION TABS
+// ============================================================
+document.querySelectorAll('.section-tab').forEach(tab => {
+  tab.onclick = () => {
+    document.querySelectorAll('.section-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    activeSection = tab.dataset.section;
+    activeTags.clear();
+    document.getElementById('sidebarLabel').textContent = activeSection === 'files' ? 'Categories' : 'Tags';
+    render();
+  };
+});
+
+// ============================================================
+// RENDER
+// ============================================================
+const catListEl = document.getElementById('catList');
+const mainTitleEl = document.getElementById('mainTitle');
+const mainActionsEl = document.getElementById('mainActions');
+const mainBodyEl = document.getElementById('mainBody');
+
+function render() {
+  renderSidebar();
+  renderMain();
+}
+
+function renderSidebar() {
+  if (activeSection === 'files') {
+    renderCategoriesSidebar();
+  } else {
+    renderTagsSidebar();
+  }
+}
+
+function renderCategoriesSidebar() {
+  catListEl.innerHTML = state.categories.map(c => `
+    <div class="cat-item ${c.id === activeCatId ? 'active' : ''}" data-cat="${c.id}">
+      <span class="cat-icon">${c.icon || '📁'}</span>
+      <span class="cat-name">${escapeHtml(c.name)}</span>
+      <span class="cat-count">${c.files.length}</span>
+      <button class="cat-del" data-del="${c.id}" title="Delete">×</button>
+    </div>
+  `).join('');
+  catListEl.querySelectorAll('.cat-item').forEach(el => {
+    el.onclick = e => {
+      if (e.target.dataset.del) return;
+      activeCatId = el.dataset.cat;
+      render();
+    };
+  });
+  catListEl.querySelectorAll('.cat-del').forEach(btn => {
+    btn.onclick = e => { e.stopPropagation(); deleteCategory(btn.dataset.del); };
+  });
+}
+
+function renderTagsSidebar() {
+  const tagCounts = {};
+  for (const link of state.links) {
+    for (const t of (link.tags || [])) {
+      tagCounts[t] = (tagCounts[t] || 0) + 1;
+    }
+  }
+  const entries = Object.entries(tagCounts).sort((a,b) => b[1] - a[1]);
+  if (entries.length === 0) {
+    catListEl.innerHTML = `<div style="padding:20px;color:var(--muted);font-size:13px;text-align:center">No tags yet</div>`;
+    return;
+  }
+  catListEl.innerHTML = entries.map(([tag, count]) => `
+    <div class="cat-item ${activeTags.has(tag) ? 'active' : ''}" data-tag="${escapeHtml(tag)}">
+      <span class="cat-icon">#</span>
+      <span class="cat-name">${escapeHtml(tag)}</span>
+      <span class="cat-count">${count}</span>
+    </div>
+  `).join('');
+  catListEl.querySelectorAll('.cat-item').forEach(el => {
+    el.onclick = () => {
+      const tag = el.dataset.tag;
+      if (activeTags.has(tag)) activeTags.delete(tag);
+      else activeTags.add(tag);
+      render();
+    };
+  });
+}
+
+function renderMain() {
+  if (activeSection === 'files') renderFilesMain();
+  else renderLinksMain();
+}
+
+function renderFilesMain() {
+  mainActionsEl.innerHTML = `
+    <button class="btn" id="newFileBtn">+ New file</button>
+    <button class="btn primary" id="massAddBtn">Mass add</button>
+  `;
+  document.getElementById('newFileBtn').onclick = () => {
+    if (!activeCatId) return toast('Create a category first');
+    openEditFileModal(null);
+  };
+  document.getElementById('massAddBtn').onclick = () => {
+    if (!activeCatId) return toast('Create a category first');
+    openMassAddModal();
+  };
+
+  if (searchTerm) {
+    const q = searchTerm.toLowerCase();
+    const allFiles = state.categories.flatMap(c => c.files.map(f => ({ ...f, _cat: c.name })));
+    const matches = allFiles.filter(f =>
+      f.name.toLowerCase().includes(q) || f.content.toLowerCase().includes(q)
+    );
+    mainTitleEl.innerHTML = `Search <span class="count">${matches.length} result${matches.length === 1 ? '' : 's'}</span>`;
+    renderFileGrid(matches, true);
+    return;
+  }
+
+  const cat = state.categories.find(c => c.id === activeCatId);
+  if (!cat) {
+    mainTitleEl.textContent = '—';
+    mainBodyEl.innerHTML = `<div class="empty"><div class="empty-icon">📁</div><h3>No category selected</h3><p>Create one with the + button</p></div>`;
+    return;
+  }
+  mainTitleEl.innerHTML = `${cat.icon || '📁'} ${escapeHtml(cat.name)} <span class="count">${cat.files.length} file${cat.files.length === 1 ? '' : 's'}</span>`;
+  renderFileGrid(cat.files, false);
+}
+
+function renderFileGrid(files, showCat) {
+  if (files.length === 0) {
+    mainBodyEl.innerHTML = `<div class="empty"><div class="empty-icon">📄</div><h3>No files</h3><p>Click "+ New file" or "Mass add"</p></div>`;
+    return;
+  }
+  mainBodyEl.innerHTML = `<div class="file-grid">${files.map(f => `
+    <div class="file-card" data-fid="${f.id}">
+      <div class="file-top">
+        <div class="file-name">${escapeHtml(f.name)}</div>
+        <button class="file-del" data-del="${f.id}" title="Delete">×</button>
+      </div>
+      ${showCat ? `<div style="font-size:11px;color:var(--muted)">in ${escapeHtml(f._cat || '')}</div>` : ''}
+      <div class="file-preview">${escapeHtml((f.content || '').slice(0, 180))}</div>
+      <div class="file-foot">
+        <button class="btn small" data-act="view">View</button>
+        <button class="btn small" data-act="edit">Edit</button>
+        <button class="btn small" data-act="copy">Copy</button>
+      </div>
+    </div>
+  `).join('')}</div>`;
+
+  mainBodyEl.querySelectorAll('.file-card').forEach(card => {
+    card.onclick = e => {
+      const fid = card.dataset.fid;
+      const file = findFile(fid);
+      if (!file) return;
+      if (e.target.dataset.del) { deleteFile(fid); e.stopPropagation(); return; }
+      const act = e.target.dataset.act;
+      if (act === 'view') openViewFileModal(file);
+      else if (act === 'edit') openEditFileModal(file);
+      else if (act === 'copy') { navigator.clipboard.writeText(file.content).then(() => toast('Copied')); e.stopPropagation(); }
+    };
+  });
+}
+
+function findFile(fid) {
+  for (const c of state.categories) {
+    const f = c.files.find(x => x.id === fid);
+    if (f) return f;
+  }
+  return null;
+}
+
+function findCategoryOfFile(fid) {
+  return state.categories.find(c => c.files.some(f => f.id === fid));
+}
+
+// ============================================================
+// LINKS MAIN
+// ============================================================
+function renderLinksMain() {
+  mainActionsEl.innerHTML = `
+    <button class="btn primary" id="newLinkBtn">+ Add link</button>
+  `;
+  document.getElementById('newLinkBtn').onclick = () => openLinkModal(null);
+
+  // filter bar with all tags
+  const allTags = new Set();
+  for (const l of state.links) for (const t of (l.tags || [])) allTags.add(t);
+
+  let links = state.links.slice();
+
+  if (searchTerm) {
+    const q = searchTerm.toLowerCase();
+    links = links.filter(l =>
+      l.name.toLowerCase().includes(q) ||
+      l.url.toLowerCase().includes(q) ||
+      (l.description || '').toLowerCase().includes(q)
+    );
+  }
+  if (activeTags.size > 0) {
+    links = links.filter(l => (l.tags || []).some(t => activeTags.has(t)));
+  }
+
+  mainTitleEl.innerHTML = `🔗 Links <span class="count">${links.length}${state.links.length !== links.length ? ` of ${state.links.length}` : ''}</span>`;
+
+  let filterHtml = '';
+  if (allTags.size > 0) {
+    filterHtml = `
+      <div class="filter-bar">
+        <span class="filter-label">Filter:</span>
+        <div class="filter-tags">
+          ${Array.from(allTags).sort().map(t => `<button class="tag ${activeTags.has(t) ? 'active' : ''}" data-filter="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join('')}
+        </div>
+        ${activeTags.size > 0 ? `<button class="btn small ghost" id="clearFilters">Clear</button>` : ''}
+      </div>
+    `;
+  }
+
+  if (links.length === 0) {
+    mainBodyEl.innerHTML = filterHtml + `<div class="empty"><div class="empty-icon">🔗</div><h3>No links</h3><p>Click "+ Add link" to save your first website</p></div>`;
+  } else {
+    mainBodyEl.innerHTML = filterHtml + `<div class="link-grid">${links.map(l => `
+      <div class="link-card" data-lid="${l.id}">
+        <div class="link-top">
+          <div class="link-name">${escapeHtml(l.name)}</div>
+          <button class="file-del" data-del="${l.id}" title="Delete">×</button>
+        </div>
+        <a class="link-url" href="${escapeHtml(l.url)}" target="_blank" rel="noopener" data-link>${escapeHtml(l.url)}</a>
+        ${l.description ? `<div class="link-desc">${escapeHtml(l.description)}</div>` : ''}
+        ${l.tags && l.tags.length ? `<div class="link-tags">${l.tags.map(t => `<span class="tag" data-tag-jump="${escapeHtml(t)}">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+        <div class="link-foot">
+          <a class="btn small primary" href="${escapeHtml(l.url)}" target="_blank" rel="noopener">Open</a>
+          <button class="btn small" data-act="edit">Edit</button>
+          <button class="btn small" data-act="copy">Copy URL</button>
+        </div>
+      </div>
+    `).join('')}</div>`;
+  }
+
+  // filter tag clicks
+  mainBodyEl.querySelectorAll('[data-filter]').forEach(el => {
+    el.onclick = () => {
+      const t = el.dataset.filter;
+      if (activeTags.has(t)) activeTags.delete(t); else activeTags.add(t);
+      render();
+    };
+  });
+  const clearBtn = document.getElementById('clearFilters');
+  if (clearBtn) clearBtn.onclick = () => { activeTags.clear(); render(); };
+
+  // card actions
+  mainBodyEl.querySelectorAll('.link-card').forEach(card => {
+    card.onclick = e => {
+      if (e.target.closest('[data-link]') || e.target.closest('.btn')) return;
+      const lid = card.dataset.lid;
+      const link = state.links.find(l => l.id === lid);
+      if (!link) return;
+      if (e.target.dataset.del) { deleteLink(lid); e.stopPropagation(); return; }
+      if (e.target.dataset.tagJump) {
+        const t = e.target.dataset.tagJump;
+        if (activeTags.has(t)) activeTags.delete(t); else activeTags.add(t);
+        render();
+        return;
+      }
+    };
+  });
+
+  mainBodyEl.querySelectorAll('.link-card [data-act="edit"]').forEach(btn => {
+    btn.onclick = e => {
+      e.stopPropagation();
+      const lid = e.target.closest('.link-card').dataset.lid;
+      const link = state.links.find(l => l.id === lid);
+      if (link) openLinkModal(link);
+    };
+  });
+  mainBodyEl.querySelectorAll('.link-card [data-act="copy"]').forEach(btn => {
+    btn.onclick = e => {
+      e.stopPropagation();
+      const lid = e.target.closest('.link-card').dataset.lid;
+      const link = state.links.find(l => l.id === lid);
+      if (link) navigator.clipboard.writeText(link.url).then(() => toast('URL copied'));
+    };
+  });
+  mainBodyEl.querySelectorAll('.link-card [data-del]').forEach(btn => {
+    btn.onclick = e => {
+      e.stopPropagation();
+      deleteLink(btn.dataset.del);
+    };
+  });
+}
+
+// ============================================================
+// LINK MODAL
+// ============================================================
+function openLinkModal(existing) {
+  const isEdit = !!existing;
+  const modal = document.createElement('div');
+  modal.className = 'modal-backdrop show';
+  const tags = isEdit ? (existing.tags || []).slice() : [];
+
+  modal.innerHTML = `
+    <div class="modal">
+      <div class="modal-head">
+        <h2>${isEdit ? 'Edit link' : 'Add link'}</h2>
+        <button class="close-x" data-close>×</button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label>Name</label>
+          <input type="text" id="lkName" placeholder="e.g. YouTube" value="${isEdit ? escapeHtml(existing.name) : ''}">
+        </div>
+        <div class="field">
+          <label>URL</label>
+          <input type="url" id="lkUrl" placeholder="https://..." value="${isEdit ? escapeHtml(existing.url) : ''}">
+        </div>
+        <div class="field">
+          <label>Description (optional)</label>
+          <textarea id="lkDesc" class="short" placeholder="What is this site for?">${isEdit ? escapeHtml(existing.description || '') : ''}</textarea>
+        </div>
+        <div class="field">
+          <label>Tags</label>
+          <div class="tag-input-wrap" id="tagWrap">
+            <input type="text" id="tagInput" placeholder="Type a tag and press Enter">
+          </div>
+          <div class="field-hint">Press Enter to add. Click × on a tag to remove. Tags group your links.</div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" data-close>Cancel</button>
+        <button class="btn primary" id="lkSave">${isEdit ? 'Save' : 'Add link'}</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('modalRoot').appendChild(modal);
+  modal.querySelectorAll('[data-close]').forEach(b => b.onclick = () => modal.remove());
+  modal.onclick = e => { if (e.target === modal) modal.remove(); };
+  modal.querySelector('#lkName').focus();
+
+  const tagWrap = modal.querySelector('#tagWrap');
+  const tagInput = modal.querySelector('#tagInput');
+
+  function renderTags() {
+    tagWrap.querySelectorAll('.tag-chip').forEach(el => el.remove());
+    for (const t of tags) {
+      const chip = document.createElement('span');
+      chip.className = 'tag-chip';
+      chip.innerHTML = `${escapeHtml(t)} <button type="button" title="Remove">×</button>`;
+      chip.querySelector('button').onclick = () => {
+        const i = tags.indexOf(t);
+        if (i >= 0) tags.splice(i, 1);
+        renderTags();
+      };
+      tagWrap.insertBefore(chip, tagInput);
+    }
+  }
+  renderTags();
+
+  tagInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && tagInput.value.trim()) {
+      e.preventDefault();
+      const t = tagInput.value.trim().toLowerCase();
+      if (!tags.includes(t)) tags.push(t);
+      tagInput.value = '';
+      renderTags();
+    } else if (e.key === 'Backspace' && tagInput.value === '' && tags.length > 0) {
+      tags.pop();
+      renderTags();
+    }
+  });
+
+  modal.querySelector('#lkSave').onclick = () => {
+    const name = modal.querySelector('#lkName').value.trim();
+    let url = modal.querySelector('#lkUrl').value.trim();
+    const description = modal.querySelector('#lkDesc').value.trim();
+
+    if (!name) return toast('Name required');
+    if (!url) return toast('URL required');
+    if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+
+    if (isEdit) {
+      existing.name = name;
+      existing.url = url;
+      existing.description = description;
+      existing.tags = tags;
+    } else {
+      state.links.push({ id: uid(), name, url, description, tags, createdAt: Date.now() });
+    }
+    saveState(); render();
+    modal.remove();
+    toast(isEdit ? 'Link updated' : 'Link added');
+  };
+}
+
+function deleteLink(lid) {
+  const link = state.links.find(l => l.id === lid);
+  if (!link) return;
+  if (!confirm(`Delete "${link.name}"?`)) return;
+  state.links = state.links.filter(l => l.id !== lid);
+  saveState(); render();
+  toast('Link deleted');
+}
+
+// ============================================================
+// CATEGORY MODAL
+// ============================================================
+document.getElementById('newCatBtn').onclick = () => {
+  if (activeSection === 'links') return openLinkModal(null);
+  openCategoryModal();
+};
+
+function openCategoryModal(existing) {
+  const isEdit = !!existing;
+  const modal = document.createElement('div');
+  modal.className = 'modal-backdrop show';
+  modal.innerHTML = `
+    <div class="modal">
+      <div class="modal-head">
+        <h2>${isEdit ? 'Edit category' : 'New category'}</h2>
+        <button class="close-x" data-close>×</button>
+      </div>
+      <div class="modal-body">
+        <div class="row">
+          <div class="field" style="flex:0 0 100px">
+            <label>Icon</label>
+            <input type="text" id="catIcon" maxlength="4" value="${isEdit ? escapeHtml(existing.icon || '') : '📁'}">
+          </div>
+          <div class="field">
+            <label>Name</label>
+            <input type="text" id="catName" placeholder="e.g. AI Jailbreaks" value="${isEdit ? escapeHtml(existing.name) : ''}">
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" data-close>Cancel</button>
+        <button class="btn primary" id="catSave">${isEdit ? 'Save' : 'Create'}</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('modalRoot').appendChild(modal);
+  modal.querySelectorAll('[data-close]').forEach(b => b.onclick = () => modal.remove());
+  modal.onclick = e => { if (e.target === modal) modal.remove(); };
+  modal.querySelector('#catName').focus();
+
+  modal.querySelector('#catSave').onclick = () => {
+    const name = modal.querySelector('#catName').value.trim();
+    const icon = modal.querySelector('#catIcon').value.trim() || '📁';
+    if (!name) return;
+    if (isEdit) { existing.name = name; existing.icon = icon; }
+    else {
+      const cat = { id: uid(), name, icon, files: [] };
+      state.categories.push(cat);
+      activeCatId = cat.id;
+    }
+    saveState(); render();
+    modal.remove();
+    toast(isEdit ? 'Category updated' : 'Category created');
+  };
+}
+
+function deleteCategory(cid) {
+  const cat = state.categories.find(c => c.id === cid);
+  if (!cat) return;
+  if (cat.files.length > 0 && !confirm(`Delete "${cat.name}" with ${cat.files.length} files?`)) return;
+  state.categories = state.categories.filter(c => c.id !== cid);
+  if (activeCatId === cid) activeCatId = state.categories[0]?.id || null;
+  saveState(); render();
+  toast('Category deleted');
+}
+
+// ============================================================
+// FILE MODALS
+// ============================================================
+function openViewFileModal(file) {
+  const modal = document.createElement('div');
+  modal.className = 'modal-backdrop show';
+  modal.innerHTML = `
+    <div class="modal wide">
+      <div class="modal-head">
+        <h2>${escapeHtml(file.name)}</h2>
+        <button class="close-x" data-close>×</button>
+      </div>
+      <div class="modal-body view">${escapeHtml(file.content || '(empty)')}</div>
+      <div class="modal-foot">
+        <button class="btn" id="vCopy">Copy</button>
+        <button class="btn primary" data-close>Close</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('modalRoot').appendChild(modal);
+  modal.querySelectorAll('[data-close]').forEach(b => b.onclick = () => modal.remove());
+  modal.onclick = e => { if (e.target === modal) modal.remove(); };
+  modal.querySelector('#vCopy').onclick = () => navigator.clipboard.writeText(file.content || '').then(() => toast('Copied'));
+  document.addEventListener('keydown', function esc(e) {
+    if (e.key === 'Escape') { modal.remove(); document.removeEventListener('keydown', esc); }
+  });
+}
+
+function openEditFileModal(file) {
+  const isNew = !file;
+  const cat = file ? findCategoryOfFile(file.id) : state.categories.find(c => c.id === activeCatId);
+  if (!cat) return toast('No category');
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-backdrop show';
+  modal.innerHTML = `
+    <div class="modal">
+      <div class="modal-head">
+        <h2>${isNew ? 'New file' : 'Edit file'}</h2>
+        <button class="close-x" data-close>×</button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label>File name</label>
+          <input type="text" id="fName" value="${isNew ? '' : escapeHtml(file.name)}">
+        </div>
+        <div class="field">
+          <label>Content</label>
+          <textarea id="fContent">${isNew ? '' : escapeHtml(file.content || '')}</textarea>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" data-close>Cancel</button>
+        <button class="btn primary" id="fSave">${isNew ? 'Create' : 'Save'}</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('modalRoot').appendChild(modal);
+  modal.querySelectorAll('[data-close]').forEach(b => b.onclick = () => modal.remove());
+  modal.onclick = e => { if (e.target === modal) modal.remove(); };
+  modal.querySelector('#fName').focus();
+  modal.querySelector('#fSave').onclick = () => {
+    const name = modal.querySelector('#fName').value.trim();
+    const content = modal.querySelector('#fContent').value;
+    if (!name) return toast('Name required');
+    if (isNew) cat.files.push({ id: uid(), name, content });
+    else { file.name = name; file.content = content; }
+    saveState(); render();
+    modal.remove();
+    toast(isNew ? 'File created' : 'File saved');
+  };
+}
+
+function deleteFile(fid) {
+  const file = findFile(fid);
+  if (!file) return;
+  if (!confirm(`Delete "${file.name}"?`)) return;
+  for (const c of state.categories) c.files = c.files.filter(f => f.id !== fid);
+  saveState(); render();
+  toast('File deleted');
+}
+
+// ============================================================
+// MASS ADD
+// ============================================================
+function openMassAddModal() {
+  const cat = state.categories.find(c => c.id === activeCatId);
+  if (!cat) return;
+  const modal = document.createElement('div');
+  modal.className = 'modal-backdrop show';
+  modal.innerHTML = `
+    <div class="modal wide">
+      <div class="modal-head">
+        <h2>Mass add to "${escapeHtml(cat.name)}"</h2>
+        <button class="close-x" data-close>×</button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label>Base name (numbers appended)</label>
+          <input type="text" id="massBase" value="file">
+        </div>
+        <div class="field">
+          <label>Paste content (blank-line separated)</label>
+          <textarea id="massContent" placeholder="block 1&#10;&#10;block 2&#10;&#10;block 3"></textarea>
+          <div class="field-hint">Each blank-line-separated block becomes a file.</div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" data-close>Cancel</button>
+        <button class="btn primary" id="massSave">Add</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('modalRoot').appendChild(modal);
+  modal.querySelectorAll('[data-close]').forEach(b => b.onclick = () => modal.remove());
+  modal.onclick = e => { if (e.target === modal) modal.remove(); };
+  modal.querySelector('#massSave').onclick = () => {
+    const base = modal.querySelector('#massBase').value.trim() || 'file';
+    const raw = modal.querySelector('#massContent').value;
+    if (!raw.trim()) return toast('Nothing to add');
+    const blocks = raw.split(/\n\s*\n/).map(b => b.trim()).filter(Boolean);
+    blocks.forEach((content, i) => cat.files.push({ id: uid(), name: `${base}${String(i+1).padStart(3,'0')}`, content }));
+    saveState(); render();
+    modal.remove();
+    toast(`Added ${blocks.length} files`);
+  };
+}
+
+// ============================================================
+// EXPORT
+// ============================================================
+document.getElementById('exportBtn').onclick = () => {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `storage-backup-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Backup downloaded');
+};
+
+// ============================================================
+// SEARCH
+// ============================================================
+document.getElementById('search').oninput = e => {
+  searchTerm = e.target.value.trim();
+  renderMain();
+};
+
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault();
+    document.getElementById('search').focus();
+  }
+});
+</script>
+</body>
+</html>
